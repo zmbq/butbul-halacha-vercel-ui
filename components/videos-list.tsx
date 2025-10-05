@@ -1,13 +1,13 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect, useTransition, useMemo, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Calendar, ExternalLink, ChevronRight, ChevronLeft, Play } from "lucide-react"
+import { Search, Calendar, ExternalLink, ChevronRight, ChevronLeft, Play, Loader2 } from "lucide-react"
 import type { HalachaVideo } from "@/lib/supabase"
 
 interface VideosListProps {
@@ -15,9 +15,7 @@ interface VideosListProps {
   currentPage: number
   totalPages: number
   totalCount: number
-  availableSubjects: string[]
   initialSearch: string
-  initialSubject: string
   initialSort: string
 }
 
@@ -26,56 +24,63 @@ export function VideosList({
   currentPage, 
   totalPages, 
   totalCount,
-  availableSubjects,
   initialSearch,
-  initialSubject,
   initialSort
 }: VideosListProps) {
+  
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
   const [searchQuery, setSearchQuery] = useState(initialSearch)
   const [sortBy, setSortBy] = useState<"date" | "title">(initialSort === "title" ? "title" : "date")
-  const [selectedSubject, setSelectedSubject] = useState<string>(initialSubject)
+  
+  // Use a separate state for the input value to avoid blocking
+  const [inputValue, setInputValue] = useState(initialSearch)
 
   // Apply filters by updating URL params (triggers server-side refetch)
-  const applyFilters = (search: string, subject: string, sort: string) => {
+  const applyFilters = useCallback((search: string, sort: string) => {
     const params = new URLSearchParams()
     if (search) params.set("search", search)
-    if (subject !== "all") params.set("subject", subject)
     if (sort !== "date") params.set("sort", sort)
     params.set("page", "1") // Reset to first page when filtering
     
-    router.push(`/videos?${params.toString()}`)
-  }
+    startTransition(() => {
+      router.push(`/videos?${params.toString()}`)
+    })
+  }, [router, startTransition])
 
-  // Handle search input change with debounce
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value)
-    // Debounce the actual filter application
+  // Debounce search - wait 500ms after user stops typing
+  useEffect(() => {
     const timer = setTimeout(() => {
-      applyFilters(value, selectedSubject, sortBy)
+      setSearchQuery(inputValue)
     }, 500)
+
     return () => clearTimeout(timer)
-  }
+  }, [inputValue])
+  
+  // Apply filters when searchQuery changes
+  useEffect(() => {
+    applyFilters(searchQuery, sortBy)
+  }, [searchQuery, sortBy, applyFilters])
 
-  const handleSubjectChange = (value: string) => {
-    setSelectedSubject(value)
-    applyFilters(searchQuery, value, sortBy)
-  }
+  // Handle input change - only update the input value state
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value)
+  }, [])
 
-  const handleSortChange = (value: "date" | "title") => {
+  const handleSortChange = useCallback((value: "date" | "title") => {
     setSortBy(value)
-    applyFilters(searchQuery, selectedSubject, value)
-  }
+    applyFilters(searchQuery, value)
+  }, [searchQuery, applyFilters])
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearchQuery("")
-    setSelectedSubject("all")
     setSortBy("date")
-    router.push("/videos")
-  }
+    startTransition(() => {
+      router.push("/videos")
+    })
+  }, [router, startTransition])
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     try {
       const date = new Date(dateString)
       return date.toLocaleDateString("he-IL", {
@@ -86,12 +91,17 @@ export function VideosList({
     } catch {
       return "תאריך לא זמין"
     }
-  }
+  }, [])
 
   const goToPage = (page: number) => {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams()
+    if (searchQuery) params.set("search", searchQuery)
+    if (sortBy !== "date") params.set("sort", sortBy)
     params.set("page", page.toString())
-    router.push(`/videos?${params.toString()}`)
+    
+    startTransition(() => {
+      router.push(`/videos?${params.toString()}`)
+    })
   }
 
   const getPageNumbers = () => {
@@ -128,37 +138,90 @@ export function VideosList({
     return pages
   }
 
+  // Memoize the expensive videos grid rendering
+  const videosGrid = useMemo(() => {
+    const result = (
+    <div className={`grid md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-200 ${isPending ? 'opacity-60' : 'opacity-100'}`}>
+      {initialVideos.map((video) => {
+        const formattedDate = (() => {
+          try {
+            const date = new Date(video.published_at)
+            return date.toLocaleDateString("he-IL", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })
+          } catch {
+            return "תאריך לא זמין"
+          }
+        })()
+        
+        return (
+        <Link 
+          key={video.video_id} 
+          href={`/videos/${video.video_id}`}
+          className="block transition-transform hover:scale-[1.02]"
+        >
+          <Card className="overflow-hidden hover:shadow-xl transition-all cursor-pointer h-full border-2 hover:border-primary/50">
+            <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 flex items-center justify-center border-b">
+              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors">
+                <Play className="w-8 h-8 text-primary" />
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <h3 className="font-bold text-lg line-clamp-2 min-h-[3.5rem] hover:text-primary transition-colors">
+                {video.metadata?.subject || video.title || "שיעור הלכה"}
+              </h3>
+
+              <div className="space-y-2">
+                {video.metadata?.hebrew_date && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="w-4 h-4" />
+                    <span>{video.metadata.hebrew_date}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="w-4 h-4" />
+                  <span>{formattedDate}</span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <div className="flex items-center justify-center gap-2 text-primary font-medium">
+                  <Play className="w-4 h-4" />
+                  <span>צפה בשיעור</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </Link>
+      )})}
+    </div>
+    )
+    return result
+  }, [initialVideos, isPending])
+
   return (
     <div className="space-y-6">
       {/* Filters */}
       <Card className="p-6">
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 gap-4">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            {isPending ? (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
+            ) : (
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            )}
             <Input
               type="text"
               placeholder="חיפוש לפי נושא..."
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
+              value={inputValue}
+              onChange={handleSearchChange}
               className="pr-10"
             />
           </div>
-
-          {/* Subject Filter */}
-          <Select value={selectedSubject} onValueChange={handleSubjectChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="בחר נושא" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">כל הנושאים</SelectItem>
-              {availableSubjects.map((subject) => (
-                <SelectItem key={subject} value={subject}>
-                  {subject}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
 
           {/* Sort */}
           <Select value={sortBy} onValueChange={(value) => handleSortChange(value as "date" | "title")}>
@@ -173,17 +236,12 @@ export function VideosList({
         </div>
 
         {/* Active filters display */}
-        {(searchQuery || selectedSubject !== "all") && (
+        {searchQuery && (
           <div className="mt-4 flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground">סינון פעיל:</span>
             {searchQuery && (
               <Button variant="secondary" size="sm" onClick={clearFilters} className="h-7 text-xs">
                 {searchQuery} ×
-              </Button>
-            )}
-            {selectedSubject !== "all" && (
-              <Button variant="secondary" size="sm" onClick={clearFilters} className="h-7 text-xs">
-                {selectedSubject} ×
               </Button>
             )}
             <Button
@@ -203,53 +261,14 @@ export function VideosList({
         <div>
           מציג {initialVideos.length} שיעורים בעמוד {currentPage} מתוך {totalPages}
         </div>
-        <div className="text-sm">סה"כ {totalCount.toLocaleString("he-IL")} שיעורים</div>
+        <div className="text-sm">
+          סה"כ {totalCount.toLocaleString("he-IL")} שיעורים
+          {isPending && <Loader2 className="inline-block w-3 h-3 mr-2 animate-spin" />}
+        </div>
       </div>
 
       {/* Videos Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {initialVideos.map((video) => (
-          <Link 
-            key={video.video_id} 
-            href={`/videos/${video.video_id}`}
-            className="block transition-transform hover:scale-[1.02]"
-          >
-            <Card className="overflow-hidden hover:shadow-xl transition-all cursor-pointer h-full border-2 hover:border-primary/50">
-              <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 flex items-center justify-center border-b">
-                <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors">
-                  <Play className="w-8 h-8 text-primary" />
-                </div>
-              </div>
-
-              <div className="p-4 space-y-3">
-                <h3 className="font-bold text-lg line-clamp-2 min-h-[3.5rem] hover:text-primary transition-colors">
-                  {video.metadata?.subject || video.title || "שיעור הלכה"}
-                </h3>
-
-                <div className="space-y-2">
-                  {video.metadata?.hebrew_date && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="w-4 h-4" />
-                      <span>{video.metadata.hebrew_date}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4" />
-                    <span>{formatDate(video.published_at)}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <div className="flex items-center justify-center gap-2 text-primary font-medium">
-                    <Play className="w-4 h-4" />
-                    <span>צפה בשיעור</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        ))}
-      </div>
+      {videosGrid}
 
       {/* No results */}
       {initialVideos.length === 0 && (
