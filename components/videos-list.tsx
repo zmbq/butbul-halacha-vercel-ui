@@ -162,9 +162,9 @@ export function VideosList({
           href={`/videos/${video.video_id}`}
           className="block transition-transform hover:scale-[1.02]"
         >
-          <Card className="overflow-hidden hover:shadow-xl transition-all cursor-pointer h-full border-2 hover:border-primary/50">
-            <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 flex items-center justify-center border-b">
-              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors">
+          <Card className="overflow-hidden hover:shadow-xl transition-all cursor-pointer h-full border-2 hover:border-primary/50 bg-gradient-to-br from-card via-card to-primary/5">
+            <div className="bg-gradient-to-br from-primary/15 via-primary/10 to-accent/10 p-8 flex items-center justify-center border-b border-primary/20">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/30 to-primary/20 flex items-center justify-center hover:from-primary/40 hover:to-primary/30 transition-all shadow-md">
                 <Play className="w-8 h-8 text-primary" />
               </div>
             </div>
@@ -177,12 +177,12 @@ export function VideosList({
               <div className="space-y-2">
                 {video.metadata?.hebrew_date && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4" />
+                    <Calendar className="w-4 h-4 text-accent-foreground" />
                     <span>{video.metadata.hebrew_date}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="w-4 h-4" />
+                  <Calendar className="w-4 h-4 text-primary/60" />
                   <span>{formattedDate}</span>
                 </div>
               </div>
@@ -205,7 +205,7 @@ export function VideosList({
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <Card className="p-6">
+      <Card className="p-6 border-primary/10 bg-gradient-to-br from-card via-card to-accent/5">
         <div className="grid md:grid-cols-2 gap-4">
           {/* Search */}
           <div className="relative">
