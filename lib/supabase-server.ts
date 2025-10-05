@@ -4,7 +4,12 @@ import { cookies } from "next/headers"
 export async function getSupabaseServer() {
   const cookieStore = await cookies()
 
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  // Prefer server-side env vars (no NEXT_PUBLIC_ prefix) for Vercel secure envs.
+  // Fall back to NEXT_PUBLIC_* for local/dev compatibility.
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  return createServerClient(supabaseUrl!, supabaseAnonKey!, {
     cookies: {
       getAll() {
         return cookieStore.getAll()

@@ -23,8 +23,9 @@ The project requires Supabase credentials. A `.env.local` file has been created 
 Edit `.env.local` and add your Supabase credentials:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url-here
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key-here
+# Server-side Supabase credentials (recommended for Vercel deployment)
+SUPABASE_URL=your-supabase-url-here
+SUPABASE_ANON_KEY=your-supabase-anon-key-here
 ```
 
 **To find your Supabase credentials:**
