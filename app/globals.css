@@ -16,8 +16,8 @@
   --popover: oklch(0.995 0.008 85);
   --popover-foreground: oklch(0.25 0.02 50);
   
-  /* Rich teal-blue primary - wisdom and trust */
-  --primary: oklch(0.45 0.12 220);
+  /* Deep burgundy/wine primary - traditional and dignified */
+  --primary: oklch(0.42 0.14 25);
   --primary-foreground: oklch(0.98 0.01 85);
   
   /* Soft warm beige secondary */
@@ -38,7 +38,7 @@
   /* Soft warm borders */
   --border: oklch(0.88 0.02 75);
   --input: oklch(0.92 0.02 75);
-  --ring: oklch(0.45 0.12 220);
+  --ring: oklch(0.42 0.14 25);
   
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -50,12 +50,12 @@
   /* Sidebar with subtle tint */
   --sidebar: oklch(0.96 0.015 80);
   --sidebar-foreground: oklch(0.25 0.02 50);
-  --sidebar-primary: oklch(0.45 0.12 220);
+  --sidebar-primary: oklch(0.42 0.14 25);
   --sidebar-primary-foreground: oklch(0.98 0.01 85);
   --sidebar-accent: oklch(0.88 0.08 80);
   --sidebar-accent-foreground: oklch(0.30 0.02 50);
   --sidebar-border: oklch(0.88 0.02 75);
-  --sidebar-ring: oklch(0.45 0.12 220);
+  --sidebar-ring: oklch(0.42 0.14 25);
 }
 
 @theme inline {

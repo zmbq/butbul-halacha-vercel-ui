@@ -16,8 +16,8 @@
   --popover: oklch(0.995 0.008 85);
   --popover-foreground: oklch(0.25 0.02 50);
   
-  /* Rich teal-blue primary - wisdom and trust */
-  --primary: oklch(0.45 0.12 220);
+  /* Deep burgundy/wine primary - traditional and dignified */
+  --primary: oklch(0.42 0.14 25);
   --primary-foreground: oklch(0.98 0.01 85);
   
   /* Soft warm beige secondary */
@@ -38,7 +38,7 @@
   /* Soft warm borders */
   --border: oklch(0.88 0.02 75);
   --input: oklch(0.92 0.02 75);
-  --ring: oklch(0.45 0.12 220);
+  --ring: oklch(0.42 0.14 25);
   
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -50,37 +50,37 @@
   /* Sidebar with subtle tint */
   --sidebar: oklch(0.96 0.015 80);
   --sidebar-foreground: oklch(0.25 0.02 50);
-  --sidebar-primary: oklch(0.45 0.12 220);
+  --sidebar-primary: oklch(0.42 0.14 25);
   --sidebar-primary-foreground: oklch(0.98 0.01 85);
   --sidebar-accent: oklch(0.88 0.08 80);
   --sidebar-accent-foreground: oklch(0.30 0.02 50);
   --sidebar-border: oklch(0.88 0.02 75);
-  --sidebar-ring: oklch(0.45 0.12 220);
+  --sidebar-ring: oklch(0.42 0.14 25);
 }
 
 .dark {
-  /* Deep warm navy background instead of pure black */
-  --background: oklch(0.20 0.03 240);
+  /* Deep warm brown background instead of pure black */
+  --background: oklch(0.20 0.02 35);
   /* Soft warm cream for text */
   --foreground: oklch(0.93 0.015 75);
   
   /* Slightly lighter card background */
-  --card: oklch(0.24 0.03 240);
+  --card: oklch(0.24 0.02 35);
   --card-foreground: oklch(0.93 0.015 75);
   
-  --popover: oklch(0.24 0.03 240);
+  --popover: oklch(0.24 0.02 35);
   --popover-foreground: oklch(0.93 0.015 75);
   
-  /* Lighter teal-blue primary for dark mode */
-  --primary: oklch(0.65 0.14 215);
-  --primary-foreground: oklch(0.20 0.03 240);
+  /* Warm terracotta/coral primary for dark mode */
+  --primary: oklch(0.68 0.16 35);
+  --primary-foreground: oklch(0.20 0.02 35);
   
-  /* Warm gray secondary */
-  --secondary: oklch(0.32 0.02 240);
+  /* Warm brown secondary */
+  --secondary: oklch(0.32 0.02 40);
   --secondary-foreground: oklch(0.93 0.015 75);
   
-  /* Muted warm tones */
-  --muted: oklch(0.28 0.02 240);
+  /* Muted warm brown tones */
+  --muted: oklch(0.28 0.02 40);
   --muted-foreground: oklch(0.65 0.02 75);
   
   /* Soft gold accent for dark mode */
@@ -91,9 +91,9 @@
   --destructive-foreground: oklch(0.93 0.015 75);
   
   /* Subtle warm borders */
-  --border: oklch(0.32 0.02 240);
-  --input: oklch(0.32 0.02 240);
-  --ring: oklch(0.65 0.14 215);
+  --border: oklch(0.32 0.02 40);
+  --input: oklch(0.32 0.02 40);
+  --ring: oklch(0.68 0.16 35);
   
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -102,14 +102,14 @@
   --chart-5: oklch(0.645 0.246 16.439);
   
   /* Sidebar with warm tint */
-  --sidebar: oklch(0.22 0.03 240);
+  --sidebar: oklch(0.22 0.02 35);
   --sidebar-foreground: oklch(0.93 0.015 75);
-  --sidebar-primary: oklch(0.65 0.14 215);
-  --sidebar-primary-foreground: oklch(0.20 0.03 240);
+  --sidebar-primary: oklch(0.68 0.16 35);
+  --sidebar-primary-foreground: oklch(0.20 0.02 35);
   --sidebar-accent: oklch(0.35 0.05 75);
   --sidebar-accent-foreground: oklch(0.93 0.015 75);
-  --sidebar-border: oklch(0.32 0.02 240);
-  --sidebar-ring: oklch(0.65 0.14 215);
+  --sidebar-border: oklch(0.32 0.02 40);
+  --sidebar-ring: oklch(0.68 0.16 35);
 }
 
 @theme inline {
