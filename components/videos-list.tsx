@@ -39,7 +39,6 @@ export function VideosList({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [searchQuery, setSearchQuery] = useState(initialSearch)
-  const [sortBy, setSortBy] = useState<"date" | "title">(initialSort === "title" ? "title" : "date")
   const [selectedYear, setSelectedYear] = useState(initialYear || " ")
   const [selectedManualTagIds, setSelectedManualTagIds] = useState<number[]>(initialManualTagIds)
   
@@ -47,16 +46,15 @@ export function VideosList({
   const [inputValue, setInputValue] = useState(initialSearch)
 
   // Apply filters by updating URL params (triggers server-side refetch)
-  const applyFilters = useCallback((search: string, sort: string, year: string, manualTagIds: number[]) => {
+  const applyFilters = useCallback((search: string, year: string, manualTagIds: number[]) => {
     const params = new URLSearchParams()
     if (search) params.set("search", search)
-    if (sort !== "date") params.set("sort", sort)
     if (year && year !== " ") params.set("year", year)
     if (manualTagIds.length > 0) params.set("tags", manualTagIds.join(','))
     params.set("page", "1") // Reset to first page when filtering
     
     startTransition(() => {
-      router.push(`/videos?${params.toString()}`)
+      router.push(`/?${params.toString()}`)
     })
   }, [router, startTransition])
 
@@ -71,46 +69,40 @@ export function VideosList({
   
   // Apply filters when searchQuery or selectedYear changes
   useEffect(() => {
-    applyFilters(searchQuery, sortBy, selectedYear, selectedManualTagIds)
-  }, [searchQuery, sortBy, selectedYear, selectedManualTagIds, applyFilters])
+    applyFilters(searchQuery, selectedYear, selectedManualTagIds)
+  }, [searchQuery, selectedYear, selectedManualTagIds, applyFilters])
 
   // Handle input change - only update the input value state
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
   }, [])
 
-  const handleSortChange = useCallback((value: "date" | "title") => {
-    setSortBy(value)
-    applyFilters(searchQuery, value, selectedYear, selectedManualTagIds)
-  }, [searchQuery, selectedYear, selectedManualTagIds, applyFilters])
-
   const handleYearChange = useCallback((value: string) => {
     setSelectedYear(value)
-    applyFilters(searchQuery, sortBy, value, selectedManualTagIds)
-  }, [searchQuery, sortBy, selectedManualTagIds, applyFilters])
+    applyFilters(searchQuery, value, selectedManualTagIds)
+  }, [searchQuery, selectedManualTagIds, applyFilters])
 
   const handleAddManualTag = useCallback((tagId: number) => {
     if (!selectedManualTagIds.includes(tagId)) {
       const newTags = [...selectedManualTagIds, tagId]
       setSelectedManualTagIds(newTags)
-      applyFilters(searchQuery, sortBy, selectedYear, newTags)
+      applyFilters(searchQuery, selectedYear, newTags)
     }
-  }, [selectedManualTagIds, searchQuery, sortBy, selectedYear, applyFilters])
+  }, [selectedManualTagIds, searchQuery, selectedYear, applyFilters])
 
   const handleRemoveManualTag = useCallback((tagId: number) => {
     const newTags = selectedManualTagIds.filter(id => id !== tagId)
     setSelectedManualTagIds(newTags)
-    applyFilters(searchQuery, sortBy, selectedYear, newTags)
-  }, [selectedManualTagIds, searchQuery, sortBy, selectedYear, applyFilters])
+    applyFilters(searchQuery, selectedYear, newTags)
+  }, [selectedManualTagIds, searchQuery, selectedYear, applyFilters])
 
   const clearFilters = useCallback(() => {
     setSearchQuery("")
     setInputValue("")
-    setSortBy("date")
     setSelectedYear(" ")
     setSelectedManualTagIds([])
     startTransition(() => {
-      router.push("/videos")
+      router.push("/")
     })
   }, [router, startTransition])
 
@@ -130,13 +122,12 @@ export function VideosList({
   const goToPage = (page: number) => {
     const params = new URLSearchParams()
     if (searchQuery) params.set("search", searchQuery)
-    if (sortBy !== "date") params.set("sort", sortBy)
     if (selectedYear && selectedYear !== " ") params.set("year", selectedYear)
     if (selectedManualTagIds.length > 0) params.set("tags", selectedManualTagIds.join(','))
     params.set("page", page.toString())
     
     startTransition(() => {
-      router.push(`/videos?${params.toString()}`)
+      router.push(`/?${params.toString()}`)
     })
   }
 
@@ -259,7 +250,7 @@ export function VideosList({
     <div className="space-y-6">
       {/* Filters */}
       <Card className="p-6 border-primary/10 bg-gradient-to-br from-card via-card to-accent/5">
-        <div className="grid md:grid-cols-4 gap-4">
+        <div className="grid md:grid-cols-3 gap-4">
           {/* Search */}
           <div className="relative">
             {isPending ? (
@@ -277,7 +268,7 @@ export function VideosList({
           </div>
 
           {/* Year Filter */}
-          <Select value={selectedYear} onValueChange={handleYearChange}>
+          <Select value={selectedYear} onValueChange={handleYearChange} dir="rtl">
             <SelectTrigger>
               <SelectValue placeholder="כל השנים" />
             </SelectTrigger>
@@ -297,6 +288,7 @@ export function VideosList({
             onValueChange={(value) => {
               if (value) handleAddManualTag(Number(value))
             }}
+            dir="rtl"
           >
             <SelectTrigger>
               <SelectValue placeholder="הוסף תגית" />
@@ -312,17 +304,6 @@ export function VideosList({
               {manualTags.filter(tag => !selectedManualTagIds.includes(tag.id)).length === 0 && (
                 <div className="px-2 py-1.5 text-sm text-muted-foreground">אין תגיות זמינות</div>
               )}
-            </SelectContent>
-          </Select>
-
-          {/* Sort */}
-          <Select value={sortBy} onValueChange={(value) => handleSortChange(value as "date" | "title")}>
-            <SelectTrigger>
-              <SelectValue placeholder="מיין לפי" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="date">תאריך</SelectItem>
-              <SelectItem value="title">נושא</SelectItem>
             </SelectContent>
           </Select>
         </div>

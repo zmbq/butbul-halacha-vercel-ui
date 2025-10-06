@@ -66,7 +66,7 @@ export default async function VideoPage({ params }: { params: any }) {
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
       {/* Back button */}
-      <Link href="/videos">
+      <Link href="/">
         <Button variant="ghost" className="mb-6">
           <ArrowRight className="w-4 h-4 ml-2 rotate-180" />
           חזרה לרשימת השיעורים

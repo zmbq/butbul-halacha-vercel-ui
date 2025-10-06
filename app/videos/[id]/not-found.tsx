@@ -11,7 +11,7 @@ export default function NotFound() {
         <p className="text-muted-foreground text-lg mb-8">
           השיעור שחיפשת אינו קיים או הוסר מהמערכת
         </p>
-        <Link href="/videos">
+        <Link href="/">
           <Button variant="default" size="lg">
             <ArrowRight className="w-4 h-4 ml-2 rotate-180" />
             חזרה לרשימת השיעורים

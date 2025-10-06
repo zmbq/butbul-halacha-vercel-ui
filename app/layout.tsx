@@ -30,11 +30,8 @@ export default function RootLayout({
                 הלכה יומית
               </Link>
               <div className="flex gap-6">
-                <Link href="/" className="text-foreground/80 hover:text-primary font-medium transition-colors">
-                  בית
-                </Link>
-                <Link href="/videos" className="text-foreground/80 hover:text-primary font-medium transition-colors">
-                  שיעורים
+                <Link href="/about" className="text-foreground/80 hover:text-primary font-medium transition-colors">
+                  אודות האתר
                 </Link>
               </div>
             </nav>
