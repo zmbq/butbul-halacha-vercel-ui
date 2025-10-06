@@ -7,11 +7,19 @@ import { notFound } from "next/navigation"
 
 export const runtime = "nodejs"
 
-export default async function VideoPage({ params }: { params: any }) {
+export default async function VideoPage({ params, searchParams }: { 
+  params: any
+  searchParams: any 
+}) {
   // `params` may be a Promise or object depending on Next setup. Awaiting it
   // handles both cases and gives a consistent typed result.
   const resolvedParams = (await params) as { id: string }
   const videoId = resolvedParams.id
+  
+  // Get search params for highlighting
+  const resolvedSearchParams = (await searchParams) as { highlight?: string; t?: string }
+  const highlightSegmentId = resolvedSearchParams.highlight ? parseInt(resolvedSearchParams.highlight) : undefined
+  const startTime = resolvedSearchParams.t ? parseInt(resolvedSearchParams.t) : undefined
 
   // Fetch video data
   const video = await getVideoById(videoId)
@@ -62,6 +70,11 @@ export default async function VideoPage({ params }: { params: any }) {
   }
 
   const embedUrl = video.url ? getEmbedUrl(video.url) : null
+  
+  // Add timestamp to embed URL if provided
+  const embedUrlWithTime = embedUrl && startTime 
+    ? `${embedUrl}?start=${startTime}&autoplay=1` 
+    : embedUrl
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
@@ -75,12 +88,12 @@ export default async function VideoPage({ params }: { params: any }) {
 
       <div className="space-y-6">
         {/* Video Player */}
-        {embedUrl ? (
+        {embedUrlWithTime ? (
           <Card className="overflow-hidden">
             <div className="relative w-full aspect-video">
               <iframe
                 className="absolute top-0 left-0 w-full h-full"
-                src={embedUrl}
+                src={embedUrlWithTime}
                 title={metadata?.subject || video.title || "שיעור הלכה"}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
@@ -169,6 +182,14 @@ export default async function VideoPage({ params }: { params: any }) {
             {transcriptionSegments && transcriptionSegments.length > 0 && (
               <div>
                 <h2 className="text-lg font-semibold mb-2">תמלול</h2>
+                
+                {highlightSegmentId && (
+                  <div className="mb-3 p-3 bg-primary/10 border border-primary/20 rounded-md text-sm">
+                    <p className="text-primary font-medium">
+                      גלילה אוטומטית לתוצאת החיפוש המודגשת למטה
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   {transcriptionSegments.map((segment) => {
@@ -177,17 +198,44 @@ export default async function VideoPage({ params }: { params: any }) {
                       const ss = Math.floor(seconds % 60).toString().padStart(2, '0')
                       return `${mm}:${ss}`
                     }
+                    
+                    const isHighlighted = highlightSegmentId === segment.id
 
                     return (
-                      <div key={segment.id} className="flex items-start gap-4">
+                      <div 
+                        key={segment.id} 
+                        id={isHighlighted ? 'highlighted-segment' : undefined}
+                        className={`flex items-start gap-4 p-2 rounded transition-colors ${
+                          isHighlighted ? 'bg-primary/20 border-2 border-primary shadow-md' : ''
+                        }`}
+                      >
                         <div className="w-20 text-sm text-muted-foreground">
                           {formatTime(segment.start)}-{formatTime(segment.end)}
                         </div>
-                        <div className="prose prose-sm whitespace-pre-wrap">{segment.text}</div>
+                        <div className={`prose prose-sm whitespace-pre-wrap ${
+                          isHighlighted ? 'font-medium' : ''
+                        }`}>
+                          {segment.text}
+                        </div>
                       </div>
                     )
                   })}
                 </div>
+                
+                {highlightSegmentId && (
+                  <script
+                    dangerouslySetInnerHTML={{
+                      __html: `
+                        setTimeout(() => {
+                          const element = document.getElementById('highlighted-segment');
+                          if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                        }, 500);
+                      `
+                    }}
+                  />
+                )}
               </div>
             )}
 

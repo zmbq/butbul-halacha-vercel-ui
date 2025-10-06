@@ -70,6 +70,21 @@ export interface Tagging {
   updated_at: string
 }
 
+export interface SearchMatch {
+  type: 'subject' | 'transcription'
+  text: string
+  similarity: number
+  segment_id?: number
+  start_time?: number
+  end_time?: number
+}
+
+export interface SearchResult {
+  video_id: string
+  matches: SearchMatch[]
+  max_similarity: number
+}
+
 // Create a singleton pool instance
 let pool: Pool | null = null
 
@@ -155,14 +170,19 @@ export async function getVideos(options: {
     }
   }
 
+  // Add join for metadata (needed for search)
+  if (search) {
+    joins.push(`LEFT JOIN video_metadata vm ON v.video_id = vm.video_id`)
+  }
+
   // Add joins to queries
   const joinClause = joins.length > 0 ? ' ' + joins.join(' ') : ''
   countQuery += joinClause
   selectQuery += joinClause
 
-  // Add search filter
+  // Add search filter - only search in subject field from video_metadata
   if (search) {
-    conditions.push(`(v.title ILIKE $${paramIndex} OR v.description ILIKE $${paramIndex})`)
+    conditions.push(`vm.subject ILIKE $${paramIndex}`)
     params.push(`%${search}%`)
     paramIndex++
   }
@@ -277,6 +297,105 @@ export async function getVideosTagsMap(videoIds: string[]): Promise<Map<string, 
   }
   
   return tagsMap
+}
+
+// Advanced search using embeddings_cache and pg_trgm similarity
+export async function advancedSearchVideos(searchQuery: string, options?: {
+  limit?: number
+  minSimilarity?: number
+}): Promise<SearchResult[]> {
+  const { limit = 50, minSimilarity = 0.1 } = options || {}
+  
+  if (!searchQuery || searchQuery.trim().length === 0) {
+    return []
+  }
+
+  // Search in embeddings_cache using both ILIKE and similarity
+  // Join with embeddings to get video_id and transcription_segment_id
+  // Group by video to aggregate matches
+  const searchResults = await query<{
+    video_id: string
+    match_type: 'subject' | 'transcription'
+    cache_text: string
+    similarity: number
+    segment_id: number | null
+    start_time: number | null
+    end_time: number | null
+  }>(
+    `
+    WITH matching_cache AS (
+      SELECT 
+        ec.id as cache_id,
+        ec.text as cache_text,
+        SIMILARITY(ec.text, $1) as similarity
+      FROM embeddings_cache ec
+      WHERE ec.text ILIKE $2
+         OR SIMILARITY(ec.text, $1) > $3
+    ),
+    subject_matches AS (
+      SELECT 
+        e.video_id,
+        'subject' as match_type,
+        mc.cache_text,
+        mc.similarity,
+        NULL::integer as segment_id,
+        NULL::numeric as start_time,
+        NULL::numeric as end_time
+      FROM matching_cache mc
+      INNER JOIN embeddings e ON e.source_cache_id = mc.cache_id
+      WHERE e.transcription_chunk_id IS NULL
+    ),
+    transcription_matches AS (
+      SELECT 
+        e.video_id,
+        'transcription' as match_type,
+        mc.cache_text,
+        mc.similarity,
+        tc.first_segment_id as segment_id,
+        tc.start as start_time,
+        tc.end as end_time
+      FROM matching_cache mc
+      INNER JOIN embeddings e ON e.source_cache_id = mc.cache_id
+      INNER JOIN transcription_chunks tc ON tc.id = e.transcription_chunk_id
+    )
+    SELECT * FROM subject_matches
+    UNION ALL
+    SELECT * FROM transcription_matches
+    ORDER BY similarity DESC
+    LIMIT $4
+    `,
+    [searchQuery, `%${searchQuery}%`, minSimilarity, limit * 5] // Get more matches to group by video
+  )
+
+  // Group results by video_id
+  const videoMatchesMap = new Map<string, SearchMatch[]>()
+  
+  for (const row of searchResults) {
+    if (!videoMatchesMap.has(row.video_id)) {
+      videoMatchesMap.set(row.video_id, [])
+    }
+    
+    videoMatchesMap.get(row.video_id)!.push({
+      type: row.match_type,
+      text: row.cache_text,
+      similarity: row.similarity,
+      segment_id: row.segment_id || undefined,
+      start_time: row.start_time || undefined,
+      end_time: row.end_time || undefined,
+    })
+  }
+
+  // Convert to SearchResult array and calculate max similarity per video
+  const results: SearchResult[] = Array.from(videoMatchesMap.entries()).map(([video_id, matches]) => ({
+    video_id,
+    matches,
+    max_similarity: Math.max(...matches.map(m => m.similarity)),
+  }))
+
+  // Sort by max similarity and limit
+  results.sort((a, b) => b.max_similarity - a.max_similarity)
+  
+  return results.slice(0, limit)
 }
 
 // Close the pool (for graceful shutdown)

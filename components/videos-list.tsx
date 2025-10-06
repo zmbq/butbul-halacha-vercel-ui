@@ -7,8 +7,18 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Calendar, ExternalLink, ChevronRight, ChevronLeft, Play, Loader2 } from "lucide-react"
-import type { HalachaVideo, Tag } from "@/lib/db"
+import { Search, Calendar, ExternalLink, ChevronRight, ChevronLeft, Play, Loader2, Sparkles } from "lucide-react"
+import type { HalachaVideo, Tag, SearchMatch } from "@/lib/db"
+
+interface AdvancedSearchResult {
+  video_id: string
+  subject?: string
+  hebrew_date?: string
+  day_of_week?: string
+  tags: Tag[]
+  matches: SearchMatch[]
+  max_similarity: number
+}
 
 interface VideosListProps {
   initialVideos: HalachaVideo[]
@@ -44,6 +54,11 @@ export function VideosList({
   
   // Use a separate state for the input value to avoid blocking
   const [inputValue, setInputValue] = useState(initialSearch)
+  
+  // Advanced search state
+  const [advancedSearchResults, setAdvancedSearchResults] = useState<AdvancedSearchResult[] | null>(null)
+  const [isAdvancedSearching, setIsAdvancedSearching] = useState(false)
+  const [advancedSearchQuery, setAdvancedSearchQuery] = useState("")
 
   // Apply filters by updating URL params (triggers server-side refetch)
   const applyFilters = useCallback((search: string, year: string, manualTagIds: number[]) => {
@@ -101,10 +116,33 @@ export function VideosList({
     setInputValue("")
     setSelectedYear(" ")
     setSelectedManualTagIds([])
+    setAdvancedSearchResults(null)
+    setAdvancedSearchQuery("")
     startTransition(() => {
       router.push("/")
     })
   }, [router, startTransition])
+  
+  // Advanced search handler
+  const handleAdvancedSearch = useCallback(async () => {
+    if (!inputValue.trim()) return
+    
+    setIsAdvancedSearching(true)
+    setAdvancedSearchQuery(inputValue)
+    
+    try {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(inputValue)}`)
+      if (!response.ok) throw new Error('Search failed')
+      
+      const data = await response.json()
+      setAdvancedSearchResults(data.results || [])
+    } catch (error) {
+      console.error('Advanced search error:', error)
+      setAdvancedSearchResults([])
+    } finally {
+      setIsAdvancedSearching(false)
+    }
+  }, [inputValue])
 
   const formatDate = useCallback((dateString: string) => {
     try {
@@ -251,20 +289,35 @@ export function VideosList({
       {/* Filters */}
       <Card className="p-6 border-primary/10 bg-gradient-to-br from-card via-card to-accent/5">
         <div className="grid md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div className="relative">
-            {isPending ? (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
-            ) : (
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            )}
-            <Input
-              type="text"
-              placeholder="חיפוש לפי נושא..."
-              value={inputValue}
-              onChange={handleSearchChange}
-              className="pr-10"
-            />
+          {/* Search with Advanced Button */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              {isPending ? (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
+              ) : (
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              )}
+              <Input
+                type="text"
+                placeholder="חיפוש לפי נושא..."
+                value={inputValue}
+                onChange={handleSearchChange}
+                className="pr-10"
+              />
+            </div>
+            <Button 
+              onClick={handleAdvancedSearch}
+              disabled={isAdvancedSearching || !inputValue.trim()}
+              size="icon"
+              variant="secondary"
+              title="חיפוש מתקדם"
+            >
+              {isAdvancedSearching ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+            </Button>
           </div>
 
           {/* Year Filter */}
@@ -347,6 +400,107 @@ export function VideosList({
           </div>
         )}
       </Card>
+
+      {/* Advanced Search Results */}
+      {advancedSearchResults && (
+        <Card className="p-6 border-primary/20 bg-gradient-to-br from-primary/5 to-accent/5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-primary" />
+              תוצאות חיפוש מתקדם
+            </h2>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setAdvancedSearchResults(null)}
+            >
+              סגור ×
+            </Button>
+          </div>
+          
+          {advancedSearchResults.length === 0 ? (
+            <p className="text-muted-foreground">לא נמצאו תוצאות עבור "{advancedSearchQuery}"</p>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">
+                נמצאו {advancedSearchResults.length} תוצאות עבור "{advancedSearchQuery}"
+              </p>
+              
+              <div className="space-y-3">
+                {advancedSearchResults.map((result) => {
+                  const subjectMatches = result.matches.filter(m => m.type === 'subject')
+                  const transcriptionMatches = result.matches.filter(m => m.type === 'transcription')
+                  
+                  return (
+                    <Link 
+                      key={result.video_id} 
+                      href={`/videos/${result.video_id}${transcriptionMatches.length > 0 ? `?highlight=${transcriptionMatches[0].segment_id}&t=${Math.floor(transcriptionMatches[0].start_time || 0)}` : ''}`}
+                    >
+                      <Card className="p-4 hover:shadow-lg transition-all hover:border-primary/50 cursor-pointer">
+                        <div className="space-y-2">
+                          <h3 className="font-bold text-lg hover:text-primary transition-colors">
+                            {result.subject || result.video_id}
+                          </h3>
+                          
+                          {result.hebrew_date && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Calendar className="w-4 h-4" />
+                              <span>
+                                {result.day_of_week && `יום ${result.day_of_week}, `}
+                                {result.hebrew_date}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Match info */}
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            {subjectMatches.length > 0 && (
+                              <span className="px-2 py-1 rounded bg-primary/20 text-primary font-medium">
+                                התאמה בנושא ({Math.round(subjectMatches[0].similarity * 100)}%)
+                              </span>
+                            )}
+                            {transcriptionMatches.length > 0 && (
+                              <span className="px-2 py-1 rounded bg-accent/20 text-accent-foreground font-medium">
+                                {transcriptionMatches.length} התאמות בתמלול
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Show first transcription match preview */}
+                          {transcriptionMatches.length > 0 && (
+                            <div className="mt-2 p-2 bg-muted/50 rounded text-sm">
+                              <p className="text-muted-foreground line-clamp-2">
+                                "{transcriptionMatches[0].text}"
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                בדקה {Math.floor((transcriptionMatches[0].start_time || 0) / 60)}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {/* Tags */}
+                          {result.tags && result.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-2">
+                              {result.tags.map((tag) => (
+                                <span
+                                  key={tag.id}
+                                  className="text-xs px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20"
+                                >
+                                  {tag.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    </Link>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </Card>
+      )}
 
       {/* Results count and page info */}
       <div className="flex items-center justify-between text-muted-foreground">
