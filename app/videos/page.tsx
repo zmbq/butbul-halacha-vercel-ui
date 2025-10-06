@@ -1,4 +1,4 @@
-import { getVideos, getVideoMetadata } from "@/lib/db"
+import { getVideos, getVideoMetadata, getYearTags } from "@/lib/db"
 import { VideosList } from "@/components/videos-list"
 
 export const runtime = "nodejs"
@@ -8,14 +8,18 @@ const VIDEOS_PER_PAGE = 24
 export default async function VideosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; sort?: string }>
+  searchParams: Promise<{ page?: string; search?: string; sort?: string; year?: string }>
 }) {
   const params = await searchParams
   const currentPage = Number(params.page) || 1
   const searchQuery = params.search || ""
   const sortBy = params.sort || "date"
+  const yearTagId = params.year ? Number(params.year) : undefined
   
   const offset = (currentPage - 1) * VIDEOS_PER_PAGE
+
+  // Fetch year tags for the dropdown
+  const yearTags = await getYearTags()
 
   // Fetch videos with direct SQL query
   const { videos, totalCount } = await getVideos({
@@ -23,7 +27,8 @@ export default async function VideosPage({
     limit: VIDEOS_PER_PAGE,
     offset,
     orderBy: 'published_at',
-    orderDirection: 'desc'
+    orderDirection: 'desc',
+    yearTagId
   })
 
   // Fetch metadata for these videos
@@ -59,6 +64,8 @@ export default async function VideosPage({
         totalCount={totalCount || 0}
         initialSearch={searchQuery}
         initialSort={sortBy}
+        yearTags={yearTags}
+        initialYear={yearTagId?.toString() || ""}
       />
     </div>
   )

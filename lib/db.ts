@@ -53,6 +53,22 @@ export interface TranscriptionSegment {
   updated_at: string
 }
 
+export interface Tag {
+  id: number
+  name: string
+  type: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Tagging {
+  id: number
+  video_id: string
+  tag_id: number
+  created_at: string
+  updated_at: string
+}
+
 // Create a singleton pool instance
 let pool: Pool | null = null
 
@@ -110,31 +126,50 @@ export async function getVideos(options: {
   offset?: number
   orderBy?: string
   orderDirection?: 'asc' | 'desc'
+  yearTagId?: number
 }): Promise<{ videos: any[], totalCount: number }> {
-  const { search, limit = 24, offset = 0, orderBy = 'published_at', orderDirection = 'desc' } = options
+  const { search, limit = 24, offset = 0, orderBy = 'published_at', orderDirection = 'desc', yearTagId } = options
 
-  let countQuery = 'SELECT COUNT(*) FROM videos'
-  let selectQuery = 'SELECT * FROM videos'
+  let countQuery = 'SELECT COUNT(DISTINCT v.video_id) FROM videos v'
+  let selectQuery = 'SELECT DISTINCT v.* FROM videos v'
   const params: any[] = []
   let paramIndex = 1
+  const conditions: string[] = []
+
+  // Add year filter via taggings table
+  if (yearTagId) {
+    countQuery += ' INNER JOIN taggings t ON v.video_id = t.video_id'
+    selectQuery += ' INNER JOIN taggings t ON v.video_id = t.video_id'
+    conditions.push(`t.tag_id = $${paramIndex}`)
+    params.push(yearTagId)
+    paramIndex++
+  }
 
   // Add search filter
   if (search) {
-    const searchCondition = ` WHERE title ILIKE $${paramIndex} OR description ILIKE $${paramIndex}`
-    countQuery += searchCondition
-    selectQuery += searchCondition
+    conditions.push(`(v.title ILIKE $${paramIndex} OR v.description ILIKE $${paramIndex})`)
     params.push(`%${search}%`)
     paramIndex++
   }
 
+  // Add WHERE clause if there are conditions
+  if (conditions.length > 0) {
+    const whereClause = ' WHERE ' + conditions.join(' AND ')
+    countQuery += whereClause
+    selectQuery += whereClause
+  }
+
   // Add ordering and pagination
-  selectQuery += ` ORDER BY ${orderBy} ${orderDirection.toUpperCase()}`
+  selectQuery += ` ORDER BY v.${orderBy} ${orderDirection.toUpperCase()}`
   selectQuery += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
   params.push(limit, offset)
 
+  // Execute count query with appropriate params (without limit/offset)
+  const countParams = params.slice(0, -2)
+  
   // Execute queries
   const [countResult, videos] = await Promise.all([
-    queryOne<{ count: string }>(countQuery, search ? [params[0]] : []),
+    queryOne<{ count: string }>(countQuery, countParams),
     query(selectQuery, params)
   ])
 
@@ -177,6 +212,13 @@ export async function getTranscriptionSegments(videoId: string): Promise<Transcr
   return query<TranscriptionSegment>(
     'SELECT * FROM transcription_segments WHERE video_id = $1 ORDER BY segment_index ASC',
     [videoId]
+  )
+}
+
+export async function getYearTags(): Promise<Tag[]> {
+  return query<Tag>(
+    `SELECT * FROM tags WHERE type = 'date' ORDER BY name DESC`,
+    []
   )
 }
 

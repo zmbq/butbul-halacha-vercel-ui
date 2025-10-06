@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Calendar, ExternalLink, ChevronRight, ChevronLeft, Play, Loader2 } from "lucide-react"
-import type { HalachaVideo } from "@/lib/db"
+import type { HalachaVideo, Tag } from "@/lib/db"
 
 interface VideosListProps {
   initialVideos: HalachaVideo[]
@@ -17,6 +17,8 @@ interface VideosListProps {
   totalCount: number
   initialSearch: string
   initialSort: string
+  yearTags: Tag[]
+  initialYear: string
 }
 
 export function VideosList({ 
@@ -25,22 +27,26 @@ export function VideosList({
   totalPages, 
   totalCount,
   initialSearch,
-  initialSort
+  initialSort,
+  yearTags,
+  initialYear
 }: VideosListProps) {
   
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [searchQuery, setSearchQuery] = useState(initialSearch)
   const [sortBy, setSortBy] = useState<"date" | "title">(initialSort === "title" ? "title" : "date")
+  const [selectedYear, setSelectedYear] = useState(initialYear || " ")
   
   // Use a separate state for the input value to avoid blocking
   const [inputValue, setInputValue] = useState(initialSearch)
 
   // Apply filters by updating URL params (triggers server-side refetch)
-  const applyFilters = useCallback((search: string, sort: string) => {
+  const applyFilters = useCallback((search: string, sort: string, year: string) => {
     const params = new URLSearchParams()
     if (search) params.set("search", search)
     if (sort !== "date") params.set("sort", sort)
+    if (year && year !== " ") params.set("year", year)
     params.set("page", "1") // Reset to first page when filtering
     
     startTransition(() => {
@@ -57,10 +63,10 @@ export function VideosList({
     return () => clearTimeout(timer)
   }, [inputValue])
   
-  // Apply filters when searchQuery changes
+  // Apply filters when searchQuery or selectedYear changes
   useEffect(() => {
-    applyFilters(searchQuery, sortBy)
-  }, [searchQuery, sortBy, applyFilters])
+    applyFilters(searchQuery, sortBy, selectedYear)
+  }, [searchQuery, sortBy, selectedYear, applyFilters])
 
   // Handle input change - only update the input value state
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,12 +75,19 @@ export function VideosList({
 
   const handleSortChange = useCallback((value: "date" | "title") => {
     setSortBy(value)
-    applyFilters(searchQuery, value)
-  }, [searchQuery, applyFilters])
+    applyFilters(searchQuery, value, selectedYear)
+  }, [searchQuery, selectedYear, applyFilters])
+
+  const handleYearChange = useCallback((value: string) => {
+    setSelectedYear(value)
+    applyFilters(searchQuery, sortBy, value)
+  }, [searchQuery, sortBy, applyFilters])
 
   const clearFilters = useCallback(() => {
     setSearchQuery("")
+    setInputValue("")
     setSortBy("date")
+    setSelectedYear(" ")
     startTransition(() => {
       router.push("/videos")
     })
@@ -97,6 +110,7 @@ export function VideosList({
     const params = new URLSearchParams()
     if (searchQuery) params.set("search", searchQuery)
     if (sortBy !== "date") params.set("sort", sortBy)
+    if (selectedYear && selectedYear !== " ") params.set("year", selectedYear)
     params.set("page", page.toString())
     
     startTransition(() => {
@@ -206,7 +220,7 @@ export function VideosList({
     <div className="space-y-6">
       {/* Filters */}
       <Card className="p-6 border-primary/10 bg-gradient-to-br from-card via-card to-accent/5">
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-3 gap-4">
           {/* Search */}
           <div className="relative">
             {isPending ? (
@@ -223,6 +237,21 @@ export function VideosList({
             />
           </div>
 
+          {/* Year Filter */}
+          <Select value={selectedYear} onValueChange={handleYearChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="כל השנים" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value=" ">כל השנים</SelectItem>
+              {yearTags.map((tag) => (
+                <SelectItem key={tag.id} value={tag.id.toString()}>
+                  {tag.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Sort */}
           <Select value={sortBy} onValueChange={(value) => handleSortChange(value as "date" | "title")}>
             <SelectTrigger>
@@ -236,12 +265,17 @@ export function VideosList({
         </div>
 
         {/* Active filters display */}
-        {searchQuery && (
+        {(searchQuery || (selectedYear && selectedYear !== " ")) && (
           <div className="mt-4 flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground">סינון פעיל:</span>
             {searchQuery && (
-              <Button variant="secondary" size="sm" onClick={clearFilters} className="h-7 text-xs">
+              <Button variant="secondary" size="sm" onClick={() => { setSearchQuery(""); setInputValue("") }} className="h-7 text-xs">
                 {searchQuery} ×
+              </Button>
+            )}
+            {selectedYear && selectedYear !== " " && (
+              <Button variant="secondary" size="sm" onClick={() => setSelectedYear(" ")} className="h-7 text-xs">
+                {yearTags.find(t => t.id.toString() === selectedYear)?.name} ×
               </Button>
             )}
             <Button
