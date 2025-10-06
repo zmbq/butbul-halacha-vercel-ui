@@ -1,4 +1,4 @@
-import { getVideos, getVideoMetadata, getYearTags, getVideosTagsMap } from "@/lib/db"
+import { getVideos, getVideoMetadata, getYearTags, getManualTags, getVideosTagsMap } from "@/lib/db"
 import { VideosList } from "@/components/videos-list"
 
 export const runtime = "nodejs"
@@ -8,18 +8,23 @@ const VIDEOS_PER_PAGE = 24
 export default async function VideosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; sort?: string; year?: string }>
+  searchParams: Promise<{ page?: string; search?: string; sort?: string; year?: string; tags?: string }>
 }) {
   const params = await searchParams
   const currentPage = Number(params.page) || 1
   const searchQuery = params.search || ""
   const sortBy = params.sort || "date"
   const yearTagId = params.year ? Number(params.year) : undefined
+  const manualTagIdsParam = params.tags || ""
+  const manualTagIds = manualTagIdsParam ? manualTagIdsParam.split(',').map(Number).filter(n => !isNaN(n)) : []
   
   const offset = (currentPage - 1) * VIDEOS_PER_PAGE
 
-  // Fetch year tags for the dropdown
-  const yearTags = await getYearTags()
+  // Fetch year tags and manual tags for the dropdowns
+  const [yearTags, manualTags] = await Promise.all([
+    getYearTags(),
+    getManualTags()
+  ])
 
   // Fetch videos with direct SQL query
   const { videos, totalCount } = await getVideos({
@@ -28,7 +33,8 @@ export default async function VideosPage({
     offset,
     orderBy: 'published_at',
     orderDirection: 'desc',
-    yearTagId
+    yearTagId,
+    manualTagIds: manualTagIds.length > 0 ? manualTagIds : undefined
   })
 
   // Fetch metadata for these videos
@@ -70,6 +76,8 @@ export default async function VideosPage({
         initialSort={sortBy}
         yearTags={yearTags}
         initialYear={yearTagId?.toString() || ""}
+        manualTags={manualTags}
+        initialManualTagIds={manualTagIds}
       />
     </div>
   )

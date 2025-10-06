@@ -128,23 +128,37 @@ export async function getVideos(options: {
   orderBy?: string
   orderDirection?: 'asc' | 'desc'
   yearTagId?: number
+  manualTagIds?: number[]
 }): Promise<{ videos: any[], totalCount: number }> {
-  const { search, limit = 24, offset = 0, orderBy = 'published_at', orderDirection = 'desc', yearTagId } = options
+  const { search, limit = 24, offset = 0, orderBy = 'published_at', orderDirection = 'desc', yearTagId, manualTagIds } = options
 
   let countQuery = 'SELECT COUNT(DISTINCT v.video_id) FROM videos v'
   let selectQuery = 'SELECT DISTINCT v.* FROM videos v'
   const params: any[] = []
   let paramIndex = 1
   const conditions: string[] = []
+  const joins: string[] = []
 
   // Add year filter via taggings table
   if (yearTagId) {
-    countQuery += ' INNER JOIN taggings t ON v.video_id = t.video_id'
-    selectQuery += ' INNER JOIN taggings t ON v.video_id = t.video_id'
-    conditions.push(`t.tag_id = $${paramIndex}`)
+    joins.push(`INNER JOIN taggings t_year ON v.video_id = t_year.video_id AND t_year.tag_id = $${paramIndex}`)
     params.push(yearTagId)
     paramIndex++
   }
+
+  // Add manual tags filter - videos must have ALL selected manual tags
+  if (manualTagIds && manualTagIds.length > 0) {
+    for (let i = 0; i < manualTagIds.length; i++) {
+      joins.push(`INNER JOIN taggings t_manual_${i} ON v.video_id = t_manual_${i}.video_id AND t_manual_${i}.tag_id = $${paramIndex}`)
+      params.push(manualTagIds[i])
+      paramIndex++
+    }
+  }
+
+  // Add joins to queries
+  const joinClause = joins.length > 0 ? ' ' + joins.join(' ') : ''
+  countQuery += joinClause
+  selectQuery += joinClause
 
   // Add search filter
   if (search) {
@@ -219,6 +233,13 @@ export async function getTranscriptionSegments(videoId: string): Promise<Transcr
 export async function getYearTags(): Promise<Tag[]> {
   return query<Tag>(
     `SELECT * FROM tags WHERE type = 'date' ORDER BY name DESC`,
+    []
+  )
+}
+
+export async function getManualTags(): Promise<Tag[]> {
+  return query<Tag>(
+    `SELECT * FROM tags WHERE type = 'manual' ORDER BY name ASC`,
     []
   )
 }

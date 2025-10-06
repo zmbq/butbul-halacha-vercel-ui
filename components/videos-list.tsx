@@ -19,6 +19,8 @@ interface VideosListProps {
   initialSort: string
   yearTags: Tag[]
   initialYear: string
+  manualTags: Tag[]
+  initialManualTagIds: number[]
 }
 
 export function VideosList({ 
@@ -29,7 +31,9 @@ export function VideosList({
   initialSearch,
   initialSort,
   yearTags,
-  initialYear
+  initialYear,
+  manualTags,
+  initialManualTagIds
 }: VideosListProps) {
   
   const router = useRouter()
@@ -37,16 +41,18 @@ export function VideosList({
   const [searchQuery, setSearchQuery] = useState(initialSearch)
   const [sortBy, setSortBy] = useState<"date" | "title">(initialSort === "title" ? "title" : "date")
   const [selectedYear, setSelectedYear] = useState(initialYear || " ")
+  const [selectedManualTagIds, setSelectedManualTagIds] = useState<number[]>(initialManualTagIds)
   
   // Use a separate state for the input value to avoid blocking
   const [inputValue, setInputValue] = useState(initialSearch)
 
   // Apply filters by updating URL params (triggers server-side refetch)
-  const applyFilters = useCallback((search: string, sort: string, year: string) => {
+  const applyFilters = useCallback((search: string, sort: string, year: string, manualTagIds: number[]) => {
     const params = new URLSearchParams()
     if (search) params.set("search", search)
     if (sort !== "date") params.set("sort", sort)
     if (year && year !== " ") params.set("year", year)
+    if (manualTagIds.length > 0) params.set("tags", manualTagIds.join(','))
     params.set("page", "1") // Reset to first page when filtering
     
     startTransition(() => {
@@ -65,8 +71,8 @@ export function VideosList({
   
   // Apply filters when searchQuery or selectedYear changes
   useEffect(() => {
-    applyFilters(searchQuery, sortBy, selectedYear)
-  }, [searchQuery, sortBy, selectedYear, applyFilters])
+    applyFilters(searchQuery, sortBy, selectedYear, selectedManualTagIds)
+  }, [searchQuery, sortBy, selectedYear, selectedManualTagIds, applyFilters])
 
   // Handle input change - only update the input value state
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,19 +81,34 @@ export function VideosList({
 
   const handleSortChange = useCallback((value: "date" | "title") => {
     setSortBy(value)
-    applyFilters(searchQuery, value, selectedYear)
-  }, [searchQuery, selectedYear, applyFilters])
+    applyFilters(searchQuery, value, selectedYear, selectedManualTagIds)
+  }, [searchQuery, selectedYear, selectedManualTagIds, applyFilters])
 
   const handleYearChange = useCallback((value: string) => {
     setSelectedYear(value)
-    applyFilters(searchQuery, sortBy, value)
-  }, [searchQuery, sortBy, applyFilters])
+    applyFilters(searchQuery, sortBy, value, selectedManualTagIds)
+  }, [searchQuery, sortBy, selectedManualTagIds, applyFilters])
+
+  const handleAddManualTag = useCallback((tagId: number) => {
+    if (!selectedManualTagIds.includes(tagId)) {
+      const newTags = [...selectedManualTagIds, tagId]
+      setSelectedManualTagIds(newTags)
+      applyFilters(searchQuery, sortBy, selectedYear, newTags)
+    }
+  }, [selectedManualTagIds, searchQuery, sortBy, selectedYear, applyFilters])
+
+  const handleRemoveManualTag = useCallback((tagId: number) => {
+    const newTags = selectedManualTagIds.filter(id => id !== tagId)
+    setSelectedManualTagIds(newTags)
+    applyFilters(searchQuery, sortBy, selectedYear, newTags)
+  }, [selectedManualTagIds, searchQuery, sortBy, selectedYear, applyFilters])
 
   const clearFilters = useCallback(() => {
     setSearchQuery("")
     setInputValue("")
     setSortBy("date")
     setSelectedYear(" ")
+    setSelectedManualTagIds([])
     startTransition(() => {
       router.push("/videos")
     })
@@ -111,6 +132,7 @@ export function VideosList({
     if (searchQuery) params.set("search", searchQuery)
     if (sortBy !== "date") params.set("sort", sortBy)
     if (selectedYear && selectedYear !== " ") params.set("year", selectedYear)
+    if (selectedManualTagIds.length > 0) params.set("tags", selectedManualTagIds.join(','))
     params.set("page", page.toString())
     
     startTransition(() => {
@@ -237,7 +259,7 @@ export function VideosList({
     <div className="space-y-6">
       {/* Filters */}
       <Card className="p-6 border-primary/10 bg-gradient-to-br from-card via-card to-accent/5">
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-4 gap-4">
           {/* Search */}
           <div className="relative">
             {isPending ? (
@@ -269,6 +291,30 @@ export function VideosList({
             </SelectContent>
           </Select>
 
+          {/* Manual Tags Filter */}
+          <Select 
+            value="" 
+            onValueChange={(value) => {
+              if (value) handleAddManualTag(Number(value))
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="הוסף תגית" />
+            </SelectTrigger>
+            <SelectContent>
+              {manualTags
+                .filter(tag => !selectedManualTagIds.includes(tag.id))
+                .map((tag) => (
+                  <SelectItem key={tag.id} value={tag.id.toString()}>
+                    {tag.name}
+                  </SelectItem>
+                ))}
+              {manualTags.filter(tag => !selectedManualTagIds.includes(tag.id)).length === 0 && (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">אין תגיות זמינות</div>
+              )}
+            </SelectContent>
+          </Select>
+
           {/* Sort */}
           <Select value={sortBy} onValueChange={(value) => handleSortChange(value as "date" | "title")}>
             <SelectTrigger>
@@ -282,7 +328,7 @@ export function VideosList({
         </div>
 
         {/* Active filters display */}
-        {(searchQuery || (selectedYear && selectedYear !== " ")) && (
+        {(searchQuery || (selectedYear && selectedYear !== " ") || selectedManualTagIds.length > 0) && (
           <div className="mt-4 flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground">סינון פעיל:</span>
             {searchQuery && (
@@ -295,6 +341,20 @@ export function VideosList({
                 {yearTags.find(t => t.id.toString() === selectedYear)?.name} ×
               </Button>
             )}
+            {selectedManualTagIds.map(tagId => {
+              const tag = manualTags.find(t => t.id === tagId)
+              return tag ? (
+                <Button 
+                  key={tagId} 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => handleRemoveManualTag(tagId)} 
+                  className="h-7 text-xs bg-primary/10 hover:bg-primary/20"
+                >
+                  {tag.name} ×
+                </Button>
+              ) : null
+            })}
             <Button
               variant="ghost"
               size="sm"
