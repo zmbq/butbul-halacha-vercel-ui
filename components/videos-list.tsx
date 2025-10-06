@@ -192,7 +192,10 @@ export function VideosList({
                 {video.metadata?.hebrew_date && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="w-4 h-4 text-accent-foreground" />
-                    <span>{video.metadata.hebrew_date}</span>
+                    <span>
+                      {video.metadata.day_of_week && `יום ${video.metadata.day_of_week}, `}
+                      {video.metadata.hebrew_date}
+                    </span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">

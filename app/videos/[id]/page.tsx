@@ -121,7 +121,10 @@ export default async function VideoPage({ params }: { params: any }) {
                   <Calendar className="w-5 h-5 mt-1 text-primary" />
                   <div>
                     <p className="text-sm text-muted-foreground">תאריך עברי</p>
-                    <p className="text-lg font-medium">{metadata.hebrew_date}</p>
+                    <p className="text-lg font-medium">
+                      {metadata.day_of_week && `יום ${metadata.day_of_week}, `}
+                      {metadata.hebrew_date}
+                    </p>
                   </div>
                 </div>
               )}
