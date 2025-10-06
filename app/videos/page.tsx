@@ -1,4 +1,4 @@
-import { getVideos, getVideoMetadata, getYearTags } from "@/lib/db"
+import { getVideos, getVideoMetadata, getYearTags, getVideosTagsMap } from "@/lib/db"
 import { VideosList } from "@/components/videos-list"
 
 export const runtime = "nodejs"
@@ -34,11 +34,15 @@ export default async function VideosPage({
   // Fetch metadata for these videos
   const videoIds = videos?.map((v) => v.video_id) || []
   const metadata = await getVideoMetadata(videoIds)
+  
+  // Fetch tags for these videos
+  const tagsMap = await getVideosTagsMap(videoIds)
 
-  // Transform the data structure - combine videos with their metadata
+  // Transform the data structure - combine videos with their metadata and tags
   let videosWithMetadata = videos?.map((video) => ({
     ...video,
     metadata: metadata?.find((m) => m.video_id === video.video_id),
+    tags: tagsMap.get(video.video_id) || [],
   })) || []
 
   // Apply client-side sorting by subject if needed

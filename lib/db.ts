@@ -19,6 +19,7 @@ export interface HalachaVideo {
     created_at: string
     updated_at: string
   }
+  tags?: Tag[]
 }
 
 export interface VideoMetadata {
@@ -220,6 +221,41 @@ export async function getYearTags(): Promise<Tag[]> {
     `SELECT * FROM tags WHERE type = 'date' ORDER BY name DESC`,
     []
   )
+}
+
+export async function getVideoTags(videoId: string): Promise<Tag[]> {
+  return query<Tag>(
+    `SELECT t.* FROM tags t
+     INNER JOIN taggings tg ON t.id = tg.tag_id
+     WHERE tg.video_id = $1
+     ORDER BY t.type, t.name`,
+    [videoId]
+  )
+}
+
+export async function getVideosTagsMap(videoIds: string[]): Promise<Map<string, Tag[]>> {
+  if (videoIds.length === 0) return new Map()
+  
+  const rows = await query<Tag & { video_id: string }>(
+    `SELECT t.*, tg.video_id FROM tags t
+     INNER JOIN taggings tg ON t.id = tg.tag_id
+     WHERE tg.video_id = ANY($1)
+     ORDER BY t.type, t.name`,
+    [videoIds]
+  )
+  
+  const tagsMap = new Map<string, Tag[]>()
+  for (const row of rows) {
+    const videoId = row.video_id
+    if (!tagsMap.has(videoId)) {
+      tagsMap.set(videoId, [])
+    }
+    // Remove video_id from the tag object before adding
+    const { video_id, ...tag } = row
+    tagsMap.get(videoId)!.push(tag as Tag)
+  }
+  
+  return tagsMap
 }
 
 // Close the pool (for graceful shutdown)

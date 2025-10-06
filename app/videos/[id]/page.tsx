@@ -1,4 +1,4 @@
-import { getVideoById, getVideoMetadataById, getTranscriptionSegments } from "@/lib/db"
+import { getVideoById, getVideoMetadataById, getTranscriptionSegments, getVideoTags } from "@/lib/db"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Calendar, ArrowRight, ExternalLink } from "lucide-react"
@@ -20,11 +20,12 @@ export default async function VideoPage({ params }: { params: any }) {
     notFound()
   }
 
-  // Fetch metadata
-  const metadata = await getVideoMetadataById(videoId)
-  
-  // Fetch transcription segments (if any)
-  const transcriptionSegments = await getTranscriptionSegments(videoId)
+  // Fetch metadata, tags, and transcription segments
+  const [metadata, tags, transcriptionSegments] = await Promise.all([
+    getVideoMetadataById(videoId),
+    getVideoTags(videoId),
+    getTranscriptionSegments(videoId)
+  ])
 
   const formatDate = (dateString: string) => {
     try {
@@ -135,6 +136,23 @@ export default async function VideoPage({ params }: { params: any }) {
                 </div>
               )}
             </div>
+
+            {/* Tags */}
+            {tags && tags.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold mb-3">תגיות</h2>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className={`tag tag-${tag.type} text-sm px-3 py-1.5 rounded-md bg-primary/10 text-primary border border-primary/20`}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Description */}
             {video.description && (

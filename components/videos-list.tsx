@@ -201,6 +201,20 @@ export function VideosList({
                 </div>
               </div>
 
+              {/* Tags */}
+              {video.tags && video.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {video.tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className={`tag tag-${tag.type} text-xs px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20`}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="pt-2">
                 <div className="flex items-center justify-center gap-2 text-primary font-medium">
                   <Play className="w-4 h-4" />
