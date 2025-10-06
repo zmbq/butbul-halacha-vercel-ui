@@ -1,67 +1,99 @@
 # butbul-halacha-vercel-ui
 
-A Next.js application for managing and displaying Halacha videos, powered by Supabase.
+A Next.js application for managing and displaying Halacha videos, with direct PostgreSQL database access.
 
 ## Prerequisites
 
 - Node.js 18.x or higher
-- pnpm (or npm/yarn)
-- A Supabase project
+- npm (or pnpm/yarn)
+- A PostgreSQL database
 
 ## Local Development Setup
 
 ### 1. Install Dependencies
 
 ```bash
-pnpm install
+npm install --legacy-peer-deps
 ```
 
 ### 2. Configure Environment Variables
 
-The project requires Supabase credentials. A `.env.local` file has been created for you.
-
-Edit `.env.local` and add your Supabase credentials:
+The project requires a PostgreSQL connection string. Create a `.env.local` file in the root directory:
 
 ```env
-# Server-side Supabase credentials (recommended for Vercel deployment)
-SUPABASE_URL=your-supabase-url-here
-SUPABASE_ANON_KEY=your-supabase-anon-key-here
+# PostgreSQL Database Connection
+# Format: postgresql://username:password@host:port/database
+POSTGRES_URL=postgresql://user:password@localhost:5432/halacha_db
+
+# Alternative name (both are supported)
+# DATABASE_URL=postgresql://user:password@localhost:5432/halacha_db
 ```
 
-**To find your Supabase credentials:**
+**Example for Supabase (using direct PostgreSQL connection):**
 
-1. Go to [Supabase Dashboard](https://app.supabase.com)
-2. Select your project
-3. Go to Settings → API
-4. Copy the `Project URL` and `anon/public key`
+```env
+POSTGRES_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+```
 
 ### 3. Run the Development Server
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
 
 ## Available Scripts
 
-- `pnpm dev` - Start the development server
-- `pnpm build` - Build the application for production
-- `pnpm start` - Start the production server
-- `pnpm lint` - Run ESLint
+- `npm run dev` - Start the development server
+- `npm run build` - Build the application for production
+- `npm start` - Start the production server
+- `npm run lint` - Run ESLint
 
 ## Tech Stack
 
 - **Framework:** Next.js 15.2
 - **UI Components:** Radix UI + shadcn/ui
 - **Styling:** Tailwind CSS
-- **Database:** Supabase
+- **Database:** PostgreSQL (direct connection via node-postgres)
 - **Deployment:** Vercel
+
+## Database Access
+
+This application uses direct PostgreSQL connections instead of PostgREST API. This enables:
+
+- **Fuzzy search capabilities** - Custom SQL queries with trigram search
+- **Vector embeddings** - Support for pgvector and semantic search
+- **Complex queries** - Full SQL flexibility for advanced features
+- **Better performance** - Optimized queries without API overhead
+
+### Database Module (`lib/db.ts`)
+
+The database module provides:
+
+- Connection pooling for efficient database access
+- Helper functions for common queries
+- Type-safe interfaces for database entities
+- Support for:
+  - Videos listing with pagination and search
+  - Video metadata and transcripts
+  - Custom SQL queries for advanced features
+
+### Adding Custom Queries
+
+You can add custom queries to `lib/db.ts`:
+
+```typescript
+export async function customQuery() {
+  return query('SELECT * FROM your_table WHERE ...', [params])
+}
+```
 
 ## Project Structure
 
 - `/app` - Next.js app directory with pages and layouts
 - `/components` - React components (UI and feature components)
-- `/lib` - Utility functions and Supabase clients
+- `/lib` - Utility functions and database client
+  - `db.ts` - PostgreSQL connection and query functions
 - `/public` - Static assets
 - `/styles` - Global styles

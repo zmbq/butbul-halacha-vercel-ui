@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "@/lib/supabase-server"
+import { getVideos, getVideoMetadata } from "@/lib/db"
 import { VideosList } from "@/components/videos-list"
 
 export const runtime = "nodejs"
@@ -10,41 +10,25 @@ export default async function VideosPage({
 }: {
   searchParams: Promise<{ page?: string; search?: string; sort?: string }>
 }) {
-  const supabase = await getSupabaseServer()
   const params = await searchParams
   const currentPage = Number(params.page) || 1
   const searchQuery = params.search || ""
   const sortBy = params.sort || "date"
   
-  const from = (currentPage - 1) * VIDEOS_PER_PAGE
-  const to = from + VIDEOS_PER_PAGE - 1
+  const offset = (currentPage - 1) * VIDEOS_PER_PAGE
 
-  // Build the videos query
-  let videosQuery = supabase
-    .from("videos")
-    .select("*", { count: "exact" })
-
-  // Apply search filter for video title/description
-  if (searchQuery) {
-    videosQuery = videosQuery.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
-  }
-
-  // Apply sorting
-  videosQuery = videosQuery.order("published_at", { ascending: false })
-
-  // Get count and execute query with pagination
-  const { data: videos, error: videosError, count: totalCount } = await videosQuery.range(from, to)
-
-  if (videosError) {
-    console.error("[v0] Error fetching videos:", videosError.message)
-  }
+  // Fetch videos with direct SQL query
+  const { videos, totalCount } = await getVideos({
+    search: searchQuery || undefined,
+    limit: VIDEOS_PER_PAGE,
+    offset,
+    orderBy: 'published_at',
+    orderDirection: 'desc'
+  })
 
   // Fetch metadata for these videos
   const videoIds = videos?.map((v) => v.video_id) || []
-  const { data: metadata } = await supabase
-    .from("video_metadata")
-    .select("*")
-    .in("video_id", videoIds)
+  const metadata = await getVideoMetadata(videoIds)
 
   // Transform the data structure - combine videos with their metadata
   let videosWithMetadata = videos?.map((video) => ({

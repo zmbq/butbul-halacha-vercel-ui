@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "@/lib/supabase-server"
+import { getVideoById, getVideoMetadataById, getTranscriptionSegments } from "@/lib/db"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Calendar, ArrowRight, ExternalLink } from "lucide-react"
@@ -8,103 +8,23 @@ import { notFound } from "next/navigation"
 export const runtime = "nodejs"
 
 export default async function VideoPage({ params }: { params: any }) {
-  const supabase = await getSupabaseServer()
   // `params` may be a Promise or object depending on Next setup. Awaiting it
   // handles both cases and gives a consistent typed result.
   const resolvedParams = (await params) as { id: string }
   const videoId = resolvedParams.id
 
   // Fetch video data
-  const { data: video, error: videoError } = await supabase
-    .from("videos")
-    .select("*")
-    .eq("video_id", videoId)
-    .single()
+  const video = await getVideoById(videoId)
 
-  if (videoError || !video) {
+  if (!video) {
     notFound()
   }
 
   // Fetch metadata
-  const { data: metadata } = await supabase
-    .from("video_metadata")
-    .select("*")
-    .eq("video_id", videoId)
-    .single()
+  const metadata = await getVideoMetadataById(videoId)
   
-  // Fetch transcript (if any)
-  const { data: transcriptRow } = await supabase
-    .from("transcripts")
-    .select("*")
-    .eq("video_id", videoId)
-    .single()
-
-  // Parse transcript JSON into a uniform `entries` array (server-side).
-  // The Whisper/Whisker JSON can have multiple shapes; try common keys first,
-  // then fall back to a recursive search for an array of objects that look like
-  // transcript segments (contain text/content/alternatives/words).
-    let transcriptEntries: any[] = []
-    if (transcriptRow) {
-      try {
-        // Primary source: the `segments` jsonb column on the transcripts table
-        if (transcriptRow.segments) {
-          transcriptEntries = typeof transcriptRow.segments === 'string'
-            ? JSON.parse(transcriptRow.segments)
-            : transcriptRow.segments
-        } else {
-          // Fallback: parse `json` column (if present) or try to extract JSON from full_text
-          let parsed: any = null
-          if (transcriptRow.json) {
-            parsed = typeof transcriptRow.json === 'string' ? JSON.parse(transcriptRow.json) : transcriptRow.json
-          } else if (typeof transcriptRow.full_text === 'string' && transcriptRow.full_text.trim().startsWith('{') && transcriptRow.full_text.includes('"segments"')) {
-            try {
-              parsed = JSON.parse(transcriptRow.full_text)
-            } catch {
-              parsed = null
-            }
-          }
-
-          if (parsed) {
-            transcriptEntries = parsed.segments || parsed.results || parsed.items || parsed.words || []
-          }
-
-          // If still empty, recursively search parsed structure for a candidate segments array
-          if ((!transcriptEntries || transcriptEntries.length === 0) && parsed) {
-            const visited = new Set<any>()
-            const looksLikeSegments = (arr: any[]) => {
-              if (!Array.isArray(arr) || arr.length === 0) return false
-              const sample = arr.slice(0, 5)
-              return sample.every((it: any) => !!(it && (it.text || it.content || it.alternatives || it.word || it.words || it.start || it.timestamp)))
-            }
-
-            const findArray = (obj: any): any[] | null => {
-              if (!obj || visited.has(obj)) return null
-              visited.add(obj)
-              if (Array.isArray(obj)) {
-                if (looksLikeSegments(obj)) return obj
-                for (const el of obj) {
-                  const found = findArray(el)
-                  if (found) return found
-                }
-                return null
-              }
-              if (typeof obj === 'object') {
-                for (const key of Object.keys(obj)) {
-                  const found = findArray(obj[key])
-                  if (found) return found
-                }
-              }
-              return null
-            }
-
-            const found = findArray(parsed)
-            if (found) transcriptEntries = found
-          }
-        }
-      } catch {
-        transcriptEntries = []
-      }
-    }
+  // Fetch transcription segments (if any)
+  const transcriptionSegments = await getTranscriptionSegments(videoId)
 
   const formatDate = (dateString: string) => {
     try {
@@ -224,41 +144,29 @@ export default async function VideoPage({ params }: { params: any }) {
               </div>
             )}
             
-            {/* Transcript: Prefer whisker/whisper JSON segments (one line per entry). Fallback to full_text. */}
-            {transcriptRow && (
+            {/* Transcript from transcription_segments table */}
+            {transcriptionSegments && transcriptionSegments.length > 0 && (
               <div>
                 <h2 className="text-lg font-semibold mb-2">תמלול</h2>
 
-                {transcriptEntries && transcriptEntries.length > 0 ? (
-                  <div className="space-y-2">
-                    {transcriptEntries.map((entry: any, idx: number) => {
-                      const text = entry.text || entry.content || entry.word || entry.alternatives?.[0]?.content || entry.alternatives?.[0]?.text || ''
-                      const start = entry.start ?? entry.start_time ?? entry.timestamp ?? (entry.words && entry.words[0] && entry.words[0].start) ?? null
-                      const end = entry.end ?? entry.end_time ?? null
+                <div className="space-y-2">
+                  {transcriptionSegments.map((segment) => {
+                    const formatTime = (seconds: number) => {
+                      const mm = Math.floor(seconds / 60)
+                      const ss = Math.floor(seconds % 60).toString().padStart(2, '0')
+                      return `${mm}:${ss}`
+                    }
 
-                      const formatTime = (t: number | null) => {
-                        if (t == null || Number.isNaN(Number(t))) return ''
-                        const seconds = Math.floor(Number(t))
-                        const mm = Math.floor(seconds / 60).toString().padStart(2, '0')
-                        const ss = (seconds % 60).toString().padStart(2, '0')
-                        return `${mm}:${ss}`
-                      }
-
-                      return (
-                        <div key={idx} className="flex items-start gap-4">
-                          <div className="w-20 text-sm text-muted-foreground">{start ? formatTime(start) : ''}{end ? `-${formatTime(end)}` : ''}</div>
-                          <div className="prose prose-sm whitespace-pre-wrap">{text}</div>
+                    return (
+                      <div key={segment.id} className="flex items-start gap-4">
+                        <div className="w-20 text-sm text-muted-foreground">
+                          {formatTime(segment.start)}-{formatTime(segment.end)}
                         </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  transcriptRow.full_text ? (
-                    <p className="text-muted-foreground whitespace-pre-wrap">{transcriptRow.full_text}</p>
-                  ) : (
-                    <p className="text-muted-foreground">אין תמלול זמין</p>
-                  )
-                )}
+                        <div className="prose prose-sm whitespace-pre-wrap">{segment.text}</div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
 

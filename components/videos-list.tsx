@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Calendar, ExternalLink, ChevronRight, ChevronLeft, Play, Loader2 } from "lucide-react"
-import type { HalachaVideo } from "@/lib/supabase"
+import type { HalachaVideo } from "@/lib/db"
 
 interface VideosListProps {
   initialVideos: HalachaVideo[]
