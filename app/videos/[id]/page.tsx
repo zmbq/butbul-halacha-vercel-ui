@@ -77,7 +77,7 @@ export default async function VideoPage({ params, searchParams }: {
     : embedUrl
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-5xl">
+  <div className="w-full mx-auto px-3 sm:px-4 py-8 sm:py-12 max-w-full md:max-w-5xl">
       {/* Back button */}
       <Link href="/">
         <Button variant="ghost" className="mb-6">
@@ -90,7 +90,7 @@ export default async function VideoPage({ params, searchParams }: {
         {/* Video Player */}
         {embedUrlWithTime ? (
           <Card className="overflow-hidden">
-            <div className="relative w-full aspect-video">
+              <div className="relative w-full aspect-video">
               <iframe
                 className="absolute top-0 left-0 w-full h-full"
                 src={embedUrlWithTime}
@@ -115,11 +115,11 @@ export default async function VideoPage({ params, searchParams }: {
         )}
 
         {/* Video Details */}
-        <Card className="p-8">
-          <div className="space-y-6">
+        <Card className="p-6 sm:p-8 min-w-0">
+            <div className="space-y-6">
             {/* Title/Subject */}
             <div>
-              <h1 className="text-4xl font-bold mb-2">
+              <h1 className="text-3xl sm:text-4xl font-bold mb-2 break-words">
                 {metadata?.subject || video.title || "שיעור הלכה"}
               </h1>
               {metadata?.subject && video.title && video.title !== metadata.subject && (
@@ -128,7 +128,7 @@ export default async function VideoPage({ params, searchParams }: {
             </div>
 
             {/* Dates */}
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {metadata?.hebrew_date && (
                 <div className="flex items-start gap-3">
                   <Calendar className="w-5 h-5 mt-1 text-primary" />
@@ -205,14 +205,14 @@ export default async function VideoPage({ params, searchParams }: {
                       <div 
                         key={segment.id} 
                         id={isHighlighted ? 'highlighted-segment' : undefined}
-                        className={`flex items-start gap-4 p-2 rounded transition-colors ${
+                        className={`flex items-start gap-4 p-2 rounded transition-colors min-w-0 ${
                           isHighlighted ? 'bg-primary/20 border-2 border-primary shadow-md' : ''
                         }`}
                       >
-                        <div className="w-20 text-sm text-muted-foreground">
+                        <div className="w-16 sm:w-20 text-sm text-muted-foreground flex-shrink-0">
                           {formatTime(segment.start)}-{formatTime(segment.end)}
                         </div>
-                        <div className={`prose prose-sm whitespace-pre-wrap ${
+                        <div className={`prose prose-sm whitespace-pre-wrap min-w-0 ${
                           isHighlighted ? 'font-medium' : ''
                         }`}>
                           {segment.text}

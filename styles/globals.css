@@ -160,4 +160,33 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Ensure containers don't exceed viewport width on small devices */
+  html, body, #__next {
+    max-width: 100%;
+  }
+  /* Respect safe-area insets on devices with notches or rounded corners */
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* Use border-box everywhere to keep width calculations sane */
+  *, *::before, *::after { box-sizing: border-box; }
+
+  /* Make embedded media scale down on small screens */
+  iframe, img, video { max-width: 100%; height: auto; }
+
+  /* Make Tailwind's container behave sanely on small screens */
+  .container {
+    width: 100%;
+    padding-left: 0.5rem; /* matches px-2 */
+    padding-right: 0.5rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  /* Make sure prose and cards wrap nicely on very small screens */
+  .prose {
+    word-break: break-word;
+  }
 }
