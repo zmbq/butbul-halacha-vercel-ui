@@ -18,6 +18,7 @@ interface AdvancedSearchResult {
   tags: Tag[]
   matches: SearchMatch[]
   max_similarity: number
+  trigger?: SearchMatch
 }
 
 interface VideosListProps {
@@ -441,6 +442,12 @@ export function VideosList({
                           <h3 className="font-bold text-lg hover:text-primary transition-colors">
                             {result.subject || result.video_id}
                           </h3>
+                          {/* Similarity badge (from trigger or max_similarity) */}
+                          <div className="mt-1">
+                            <span className="inline-block px-2 py-0.5 text-xs rounded bg-primary/10 text-primary border border-primary/20">
+                              דמיון: {Math.round(((result.trigger?.similarity ?? result.max_similarity) || 0) * 100)}%
+                            </span>
+                          </div>
                           
                           {result.hebrew_date && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -7,8 +7,8 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const query = searchParams.get('q')
-    const limit = parseInt(searchParams.get('limit') || '50')
-    const minSimilarity = parseFloat(searchParams.get('minSimilarity') || '0.1')
+  const limit = parseInt(searchParams.get('limit') || '50')
+  const minSimilarity = parseFloat(searchParams.get('minSimilarity') || '0.1')
 
     if (!query || query.trim().length === 0) {
       return NextResponse.json({ 
@@ -17,9 +17,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Perform advanced search
-    const searchResults = await advancedSearchVideos(query, {
+    const { results: searchResults, queryVector } = await advancedSearchVideos(query, {
       limit,
-      minSimilarity
+      minSimilarity,
     })
 
     // Get video metadata and tags for the results
@@ -41,14 +41,16 @@ export async function GET(request: NextRequest) {
         day_of_week: videoMetadata?.day_of_week,
         tags,
         matches: result.matches,
-        max_similarity: result.max_similarity
+        max_similarity: result.max_similarity,
+        trigger: result.trigger
       }
     })
 
     return NextResponse.json({
       results: enrichedResults,
       total: enrichedResults.length,
-      query
+      query,
+      queryVector
     })
 
   } catch (error) {

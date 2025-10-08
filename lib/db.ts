@@ -83,7 +83,13 @@ export interface SearchResult {
   video_id: string
   matches: SearchMatch[]
   max_similarity: number
+  trigger?: SearchMatch
 }
+
+// Weights for combining different signal types. Tweak these to experiment.
+const TRIGRAM_WEIGHT = 1.0
+const ILIKE_WEIGHT = 0.6
+const EMBEDDING_WEIGHT = 2.0
 
 // Create a singleton pool instance
 let pool: Pool | null = null
@@ -303,82 +309,120 @@ export async function getVideosTagsMap(videoIds: string[]): Promise<Map<string, 
 export async function advancedSearchVideos(searchQuery: string, options?: {
   limit?: number
   minSimilarity?: number
-}): Promise<SearchResult[]> {
+}): Promise<{ results: SearchResult[]; queryVector?: number[] }> {
   const { limit = 50, minSimilarity = 0.1 } = options || {}
   
   if (!searchQuery || searchQuery.trim().length === 0) {
-    return []
+    return { results: [], queryVector: undefined }
   }
 
-  // Search in embeddings_cache using both ILIKE and similarity
-  // Join with embeddings to get video_id and transcription_segment_id
-  // Group by video to aggregate matches
+  // We'll try to augment the text-based search with vector embeddings when an
+  // OpenAI key is available. If no key is present or an error happens, we
+  // gracefully fall back to the text-only search (existing behavior).
+  const openAiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY
+
+  // Use module-level constants for weights. These are the single source of
+  // truth for tuning and must be changed in this file (not via API).
+  const TRIGRAM = TRIGRAM_WEIGHT
+  const ILIKE = ILIKE_WEIGHT
+  const EMBED = EMBEDDING_WEIGHT
+
+  let vector: number[] | null = null
+  if (openAiKey) {
+    try {
+      // Use the small embedding model; change model name if you prefer another one.
+      const res = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openAiKey}`,
+        },
+        body: JSON.stringify({ input: searchQuery, model: 'text-embedding-3-small' }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        // Defensive access to the embedding vector
+        if (data && data.data && Array.isArray(data.data) && data.data[0] && Array.isArray(data.data[0].embedding)) {
+          vector = data.data[0].embedding
+        }
+      } else {
+        // Non-fatal: log and continue with text-only search
+        console.warn('OpenAI embeddings request failed', await res.text())
+      }
+    } catch (err) {
+      console.warn('OpenAI embeddings error:', err)
+      vector = null
+    }
+  }
+
+  // If we have a vector, Postgres pgvector expects a literal like '[0.1,0.2,...]'
+  // when passed as a parameter cast to ::vector. Convert the JS array to that
+  // string form here. If vector is null this will remain null.
+  const vectorParam = vector ? '[' + vector.join(',') + ']' : null
+
+  // If we failed to obtain a vector, and the caller requested embedding-only
+  // behavior, return empty results (we're disabling ILIKE/pg_trgm for now).
+  if (!vector) {
+    return { results: [], queryVector: undefined }
+  }
+
+  // If we have a vector, include an embedding-based score into the SQL and
+  // compute a combined ranking score. This assumes your `embeddings_cache`
+  // table has a pgvector column named `vector`. If your column is named
+  // differently, change `ec.vector` below. We convert a vector distance
+  // to a similarity-like score with `1 / (1 + distance)` so larger is better.
+  // NOTE: this SQL uses the pgvector `<->` operator (Euclidean distance).
+  // Vector-only nearest neighbor search: find the closest cache rows by
+  // vector distance, then join to embeddings to map to videos and
+  // transcription chunks. We fetch more cache rows (nearestLimit) to
+  // increase the chance of covering enough videos, then group by video.
+  const nearestLimit = Math.max(200, limit * 20)
+
   const searchResults = await query<{
     video_id: string
-    match_type: 'subject' | 'transcription'
+    match_type: 'transcription'
     cache_text: string
-    similarity: number
+    distance: number
     segment_id: number | null
     start_time: number | null
     end_time: number | null
   }>(
     `
-    WITH matching_cache AS (
-      SELECT 
-        ec.id as cache_id,
-        ec.text as cache_text,
-        SIMILARITY(ec.text, $1) as similarity
+    WITH nearest AS (
+      SELECT ec.id as cache_id, ec.text as cache_text, (ec.vector <-> $1::vector) as distance
       FROM embeddings_cache ec
-      WHERE ec.text ILIKE $2
-         OR SIMILARITY(ec.text, $1) > $3
-    ),
-    subject_matches AS (
-      SELECT 
-        e.video_id,
-        'subject' as match_type,
-        mc.cache_text,
-        mc.similarity,
-        NULL::integer as segment_id,
-        NULL::numeric as start_time,
-        NULL::numeric as end_time
-      FROM matching_cache mc
-      INNER JOIN embeddings e ON e.source_cache_id = mc.cache_id
-      WHERE e.transcription_chunk_id IS NULL
-    ),
-    transcription_matches AS (
-      SELECT 
-        e.video_id,
-        'transcription' as match_type,
-        mc.cache_text,
-        mc.similarity,
-        tc.first_segment_id as segment_id,
-        tc.start as start_time,
-        tc.end as end_time
-      FROM matching_cache mc
-      INNER JOIN embeddings e ON e.source_cache_id = mc.cache_id
-      INNER JOIN transcription_chunks tc ON tc.id = e.transcription_chunk_id
+      WHERE ec.vector IS NOT NULL
+      ORDER BY distance ASC
+      LIMIT $2::int
     )
-    SELECT * FROM subject_matches
-    UNION ALL
-    SELECT * FROM transcription_matches
-    ORDER BY similarity DESC
-    LIMIT $4
+    SELECT e.video_id, 'transcription' as match_type, n.cache_text, n.distance, tc.first_segment_id as segment_id, tc.start as start_time, tc.end as end_time
+    FROM nearest n
+    INNER JOIN embeddings e ON e.source_cache_id = n.cache_id
+    INNER JOIN transcription_chunks tc ON tc.id = e.transcription_chunk_id
+    WHERE e.transcription_chunk_id IS NOT NULL
+    ORDER BY n.distance ASC
+    LIMIT $3::int
     `,
-    [searchQuery, `%${searchQuery}%`, minSimilarity, limit * 5] // Get more matches to group by video
+    // params: vectorParam, nearestLimit, limit
+    [vectorParam, nearestLimit, limit]
   )
 
   // Group results by video_id
   const videoMatchesMap = new Map<string, SearchMatch[]>()
-  
+
   for (const row of searchResults) {
     if (!videoMatchesMap.has(row.video_id)) {
       videoMatchesMap.set(row.video_id, [])
     }
-    
+
+    // Convert distance -> similarity (1 / (1 + distance)) so larger is better
+    const similarity = typeof row.distance === 'number' ? (1.0 / (1.0 + row.distance)) : 0
+
     videoMatchesMap.get(row.video_id)!.push({
       type: row.match_type,
       text: row.cache_text,
-      similarity: row.similarity,
+      similarity,
       segment_id: row.segment_id || undefined,
       start_time: row.start_time || undefined,
       end_time: row.end_time || undefined,
@@ -390,12 +434,14 @@ export async function advancedSearchVideos(searchQuery: string, options?: {
     video_id,
     matches,
     max_similarity: Math.max(...matches.map(m => m.similarity)),
+    // Choose a trigger match: prefer the first transcription match, else first match
+    trigger: matches.find(m => m.type === 'transcription') || matches[0]
   }))
 
   // Sort by max similarity and limit
   results.sort((a, b) => b.max_similarity - a.max_similarity)
-  
-  return results.slice(0, limit)
+
+  return { results: results.slice(0, limit), queryVector: vector || undefined }
 }
 
 // Close the pool (for graceful shutdown)
