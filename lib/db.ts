@@ -411,13 +411,34 @@ export async function advancedSearchVideos(searchQuery: string, options?: {
   // Group results by video_id
   const videoMatchesMap = new Map<string, SearchMatch[]>()
 
+  // Build min/max distance across the returned candidate rows so we can
+  // normalize distances into a 0..1 similarity score. This spreads values
+  // across the results instead of collapsing around ~0.5 for typical
+  // Euclidean distances.
+  const distances = searchResults.map(r => typeof (r as any).distance === 'number' ? (r as any).distance : Infinity)
+  const minDist = distances.length > 0 ? Math.min(...distances) : 0
+  const maxDist = distances.length > 0 ? Math.max(...distances) : 0
+
   for (const row of searchResults) {
     if (!videoMatchesMap.has(row.video_id)) {
       videoMatchesMap.set(row.video_id, [])
     }
 
-    // Convert distance -> similarity (1 / (1 + distance)) so larger is better
-    const similarity = typeof row.distance === 'number' ? (1.0 / (1.0 + row.distance)) : 0
+    // Normalize distance into 0..1 similarity where smaller distance ->
+    // higher similarity. If all distances are equal, fall back to 1.0.
+    let similarity = 0
+    if (typeof (row as any).distance === 'number') {
+      const d = (row as any).distance
+      if (maxDist === minDist) {
+        similarity = 1
+      } else {
+        // invert so smaller distance => larger similarity
+        similarity = 1 - ((d - minDist) / (maxDist - minDist))
+        // clamp
+        if (similarity < 0) similarity = 0
+        if (similarity > 1) similarity = 1
+      }
+    }
 
     videoMatchesMap.get(row.video_id)!.push({
       type: row.match_type,
